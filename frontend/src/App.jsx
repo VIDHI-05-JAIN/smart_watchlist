@@ -4,7 +4,7 @@ import AddSymbol from './components/AddSymbol';
 import WatchlistFeed from './components/WatchlistFeed';
 import './App.css';
 
-const USER_ID = 1; // hardcoded single-user for the hackathon build
+const USER_ID = 1;
 
 function App() {
   const [watchlistId, setWatchlistId] = useState(
@@ -12,6 +12,7 @@ function App() {
   );
   const [feed, setFeed] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [justAdded, setJustAdded] = useState(null);
 
   useEffect(() => {
     if (!watchlistId) {
@@ -32,13 +33,15 @@ function App() {
 
   useEffect(() => {
     refresh();
-    const interval = setInterval(refresh, 20_000); // poll for updates
+    const interval = setInterval(refresh, 15_000);
     return () => clearInterval(interval);
   }, [refresh]);
 
   const handleAdd = async (symbol) => {
     await addSymbol(watchlistId, symbol);
+    setJustAdded(symbol);
     refresh();
+    setTimeout(() => setJustAdded(null), 1500);
   };
 
   const handleRemove = async (symbol) => {
@@ -48,10 +51,14 @@ function App() {
 
   return (
     <div className="app">
-      <h1>Smart Watchlist</h1>
-      <AddSymbol onAdd={handleAdd} />
-      {loading && <p className="loading">Refreshing…</p>}
-      <WatchlistFeed feed={feed} onRemove={handleRemove} />
+      <div className="app-header">
+        <h1>Smart Watchlist</h1>
+        <span className="live-dot">live</span>
+      </div>
+
+      <AddSymbol onAdd={handleAdd} existing={feed.map((f) => f.symbol)} />
+      {loading && <div className="loading-strip" />}
+      <WatchlistFeed feed={feed} onRemove={handleRemove} justAdded={justAdded} />
     </div>
   );
 }
