@@ -71,12 +71,17 @@ Opens at `localhost:5173`. Backend must be running at `localhost:4000`.
 
 ## Current status
 - Backend: watchlist CRUD, Signal Score engine, background poller, per-user
-  diffing — done and tested.
+  diffing, batched feed queries — done and tested.
 - Frontend: add/remove symbols, live feed sorted by score, stale-data
   banner, first-look/empty states — done.
-- Not done / known limitations (worth naming honestly rather than hiding):
-  single hardcoded user, no real market data source (mock adapter, swappable
-  by design), no deploy yet.
+- Deployed: backend on Render, frontend on Vercel (see live demo link above).
+- Known limitations (worth naming honestly rather than hiding): single
+  hardcoded user, no real market data source (mock adapter, swappable by
+  design).
+
+**Note for reviewers:** the backend is on Render's free tier, which spins
+down after inactivity. The first request may take 30-60 seconds to respond
+— that's a hosting tier limitation, not the system itself.
 
 ## Pitch (100 words)
 Most watchlists just show today's price. Ours decides what deserves your
