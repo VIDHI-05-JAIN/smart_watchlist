@@ -83,7 +83,7 @@ Opens at `localhost:5173`. Backend must be running at `localhost:4000`.
 down after inactivity. The first request may take 30-60 seconds to respond
 — that's a hosting tier limitation, not the system itself.
 
-## Pitch (100 words)
+## Pitch
 Most watchlists just show today's price. Ours decides what deserves your
 attention. Each stock gets a Signal Score combining a volatility-adjusted
 price move, volume anomaly, and 52-week level crossings — so meaning is
