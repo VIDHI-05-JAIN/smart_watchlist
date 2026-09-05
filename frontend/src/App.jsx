@@ -7,21 +7,16 @@ import './App.css';
 const USER_ID = 1;
 
 function App() {
-  const [watchlistId, setWatchlistId] = useState(
-    () => localStorage.getItem('watchlistId') || null
-  );
+  const [watchlistId, setWatchlistId] = useState(null);
   const [feed, setFeed] = useState([]);
   const [loading, setLoading] = useState(false);
   const [justAdded, setJustAdded] = useState(null);
 
+  // Always resolve the watchlist by user identity, not browser storage —
+  // this is what makes it persist across devices/sessions correctly.
   useEffect(() => {
-    if (!watchlistId) {
-      createWatchlist(USER_ID, 'My Watchlist').then((w) => {
-        localStorage.setItem('watchlistId', w.id);
-        setWatchlistId(w.id);
-      });
-    }
-  }, [watchlistId]);
+    createWatchlist(USER_ID, 'My Watchlist').then((w) => setWatchlistId(w.id));
+  }, []);
 
   const refresh = useCallback(() => {
     if (!watchlistId) return;

@@ -4,14 +4,17 @@ const { meaningfulChange } = require('../services/changeDetection');
 module.exports = function (db) {
   const router = express.Router();
 
-  router.post('/watchlists', async (req, res) => {
-    const { userId, name } = req.body;
-    const { rows } = await db.query(
-      'INSERT INTO watchlists (user_id, name) VALUES ($1,$2) RETURNING *',
-      [userId, name || 'My Watchlist']
-    );
-    res.json(rows[0]);
-  });
+router.post('/watchlists', async (req, res) => {
+  const { userId, name } = req.body;
+  const existing = await db.query('SELECT * FROM watchlists WHERE user_id=$1 LIMIT 1', [userId]);
+  if (existing.rows[0]) return res.json(existing.rows[0]);
+
+  const { rows } = await db.query(
+    'INSERT INTO watchlists (user_id, name) VALUES ($1,$2) RETURNING *',
+    [userId, name || 'My Watchlist']
+  );
+  res.json(rows[0]);
+});
 
   router.post('/watchlists/:id/items', async (req, res) => {
     const { symbol } = req.body;
