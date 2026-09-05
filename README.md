@@ -73,7 +73,8 @@ Opens at `localhost:5173`. Backend must be running at `localhost:4000`.
 - Backend: watchlist CRUD, Signal Score engine, background poller, per-user
   diffing, batched feed queries — done and tested.
 - Frontend: add/remove symbols, live feed sorted by score, stale-data
-  banner, first-look/empty states — done.
+  banner, first-look/empty states, per-symbol price sparkline, last-checked
+  timestamp — done.
 - Deployed: backend on Render, frontend on Vercel (see live demo link above).
 - Known limitations (worth naming honestly rather than hiding): single
   hardcoded user, no real market data source (mock adapter, swappable by
