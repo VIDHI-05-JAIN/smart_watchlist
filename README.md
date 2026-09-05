@@ -1,5 +1,5 @@
 # Smart Market Watchlist — Groww Code 2026
-
+**Live demo:** https://smart-watchlist-three.vercel.app
 ## The idea
 Most watchlists show you numbers. This one decides what's worth your attention.
 
