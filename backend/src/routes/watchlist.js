@@ -4,17 +4,17 @@ const { meaningfulChange } = require('../services/changeDetection');
 module.exports = function (db) {
   const router = express.Router();
 
-router.post('/watchlists', async (req, res) => {
-  const { userId, name } = req.body;
-  const existing = await db.query('SELECT * FROM watchlists WHERE user_id=$1 LIMIT 1', [userId]);
-  if (existing.rows[0]) return res.json(existing.rows[0]);
+  router.post('/watchlists', async (req, res) => {
+    const { userId, name } = req.body;
+    const existing = await db.query('SELECT * FROM watchlists WHERE user_id=$1 LIMIT 1', [userId]);
+    if (existing.rows[0]) return res.json(existing.rows[0]);
 
-  const { rows } = await db.query(
-    'INSERT INTO watchlists (user_id, name) VALUES ($1,$2) RETURNING *',
-    [userId, name || 'My Watchlist']
-  );
-  res.json(rows[0]);
-});
+    const { rows } = await db.query(
+      'INSERT INTO watchlists (user_id, name) VALUES ($1,$2) RETURNING *',
+      [userId, name || 'My Watchlist']
+    );
+    res.json(rows[0]);
+  });
 
   router.post('/watchlists/:id/items', async (req, res) => {
     const { symbol } = req.body;
@@ -35,8 +35,8 @@ router.post('/watchlists', async (req, res) => {
   });
 
   /**
-   * Batched version: 3 queries total regardless of watchlist size, instead
-   * of 3 queries PER symbol. This is the answer to "how does this scale to
+   * Batched version: 4 queries total regardless of watchlist size, instead
+   * of N queries per symbol. This is the answer to "how does this scale to
    * larger watchlists" — a 50-symbol watchlist costs the same query count
    * as a 5-symbol one.
    */
@@ -67,7 +67,22 @@ router.post('/watchlists', async (req, res) => {
     );
     const statsBySymbol = Object.fromEntries(stats.map((s) => [s.symbol, s]));
 
-    // 3. All last-seen snapshots in one query
+    // 3. Recent price history per symbol, for the sparkline — last 15
+    // points per symbol, grouped in JS to avoid a window-function query
+    // that's harder to reason about under time pressure.
+    const { rows: history } = await db.query(
+      `SELECT symbol, price, fetched_at FROM price_snapshots
+       WHERE symbol = ANY($1) ORDER BY symbol, fetched_at DESC`,
+      [symbols]
+    );
+    const historyBySymbol = {};
+    for (const row of history) {
+      if (!historyBySymbol[row.symbol]) historyBySymbol[row.symbol] = [];
+      if (historyBySymbol[row.symbol].length < 15) historyBySymbol[row.symbol].push(Number(row.price));
+    }
+    for (const sym in historyBySymbol) historyBySymbol[sym].reverse();
+
+    // 4. All last-seen snapshots in one query
     const lastSeenIds = items.map((i) => i.last_seen_snapshot_id).filter(Boolean);
     let lastSeenById = {};
     if (lastSeenIds.length) {
@@ -92,13 +107,16 @@ router.post('/watchlists', async (req, res) => {
 
       const diff = meaningfulChange({ currentSnapshot: current, lastSeenSnapshot: lastSeen, stats: stat });
 
-      feed.push({ symbol: item.symbol, price: current.price, fetchedAt: current.fetched_at, ...diff });
+      feed.push({
+        symbol: item.symbol,
+        price: current.price,
+        fetchedAt: current.fetched_at,
+        history: historyBySymbol[item.symbol] || [],
+        ...diff,
+      });
       updates.push({ itemId: item.id, snapshotId: current.id });
     }
 
-    // Advance last-seen pointers — still one query per item, but this is a
-    // write, not a read, and Postgres can batch it in a single round trip
-    // via a single UPDATE ... FROM VALUES statement.
     if (updates.length) {
       const values = updates.map((u, i) => `($${i * 2 + 1}::int, $${i * 2 + 2}::int)`).join(',');
       const params = updates.flatMap((u) => [u.itemId, u.snapshotId]);

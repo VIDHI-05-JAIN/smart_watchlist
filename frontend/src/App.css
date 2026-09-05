@@ -242,7 +242,9 @@ body {
   padding: 4px;
   line-height: 1;
 }
-
+.sparkline { flex-shrink: 0; margin-left: 4px; }
+.sparkline-empty { color: var(--muted); font-size: 11px; margin-left: 4px; }
+.timestamp { color: var(--muted); font-size: 11px; margin-left: auto; }
 .remove-btn:hover { color: var(--down); }
 
 .loading-strip {

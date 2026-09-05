@@ -1,3 +1,12 @@
+import Sparkline from './Sparkline';
+
+function timeAgo(dateStr) {
+  const seconds = Math.floor((Date.now() - new Date(dateStr)) / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}m ago`;
+}
+
 export default function WatchlistFeed({ feed, onRemove, justAdded }) {
   if (!feed.length) {
     return (
@@ -29,6 +38,7 @@ export default function WatchlistFeed({ feed, onRemove, justAdded }) {
               <div className="row-top">
                 <span className="symbol">{item.symbol}</span>
                 <span className="price">${item.price}</span>
+                <Sparkline data={item.history} positive={item.priceDeltaPct >= 0} />
                 {item.priceDeltaPct === null ? (
                   <span className="delta neutral">first look</span>
                 ) : (
@@ -41,6 +51,7 @@ export default function WatchlistFeed({ feed, onRemove, justAdded }) {
               <div className="row-sub">
                 <span className="score-badge">Signal {item.score}</span>
                 {item.isStale && <span className="stale-tag">stale</span>}
+                <span className="timestamp">{timeAgo(item.fetchedAt)}</span>
               </div>
               {item.reasons.length > 0 && (
                 <ul className="reasons">
