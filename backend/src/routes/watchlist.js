@@ -35,10 +35,10 @@ module.exports = function (db) {
   });
 
   /**
-   * Batched version: 4 queries total regardless of watchlist size, instead
-   * of N queries per symbol. This is the answer to "how does this scale to
-   * larger watchlists" — a 50-symbol watchlist costs the same query count
-   * as a 5-symbol one.
+   * Read-only now — does NOT advance last_seen. Polling for live prices
+   * should never silently consume the "what changed since you looked"
+   * signal. Marking as seen is a separate, explicit action (see
+   * /mark-seen below), triggered only when the user actually opens the app.
    */
   router.get('/watchlists/:id/feed', async (req, res) => {
     const { rows: items } = await db.query(
@@ -50,7 +50,6 @@ module.exports = function (db) {
 
     const symbols = items.map((i) => i.symbol);
 
-    // 1. Latest snapshot per symbol, in one query using DISTINCT ON
     const { rows: snapshots } = await db.query(
       `SELECT DISTINCT ON (symbol) *
        FROM price_snapshots
@@ -60,16 +59,12 @@ module.exports = function (db) {
     );
     const snapshotBySymbol = Object.fromEntries(snapshots.map((s) => [s.symbol, s]));
 
-    // 2. All stats in one query
     const { rows: stats } = await db.query(
       'SELECT * FROM symbol_stats WHERE symbol = ANY($1)',
       [symbols]
     );
     const statsBySymbol = Object.fromEntries(stats.map((s) => [s.symbol, s]));
 
-    // 3. Recent price history per symbol, for the sparkline — last 15
-    // points per symbol, grouped in JS to avoid a window-function query
-    // that's harder to reason about under time pressure.
     const { rows: history } = await db.query(
       `SELECT symbol, price, fetched_at FROM price_snapshots
        WHERE symbol = ANY($1) ORDER BY symbol, fetched_at DESC`,
@@ -82,7 +77,6 @@ module.exports = function (db) {
     }
     for (const sym in historyBySymbol) historyBySymbol[sym].reverse();
 
-    // 4. All last-seen snapshots in one query
     const lastSeenIds = items.map((i) => i.last_seen_snapshot_id).filter(Boolean);
     let lastSeenById = {};
     if (lastSeenIds.length) {
@@ -94,11 +88,10 @@ module.exports = function (db) {
     }
 
     const feed = [];
-    const updates = [];
 
     for (const item of items) {
       const current = snapshotBySymbol[item.symbol];
-      if (!current) continue; // not polled yet
+      if (!current) continue;
 
       const stat = statsBySymbol[item.symbol] || {};
       const lastSeen = item.last_seen_snapshot_id
@@ -114,22 +107,41 @@ module.exports = function (db) {
         history: historyBySymbol[item.symbol] || [],
         ...diff,
       });
-      updates.push({ itemId: item.id, snapshotId: current.id });
-    }
-
-    if (updates.length) {
-      const values = updates.map((u, i) => `($${i * 2 + 1}::int, $${i * 2 + 2}::int)`).join(',');
-      const params = updates.flatMap((u) => [u.itemId, u.snapshotId]);
-      await db.query(
-        `UPDATE watchlist_items AS wi SET last_seen_snapshot_id = v.snapshot_id, last_seen_at = now()
-         FROM (VALUES ${values}) AS v(item_id, snapshot_id)
-         WHERE wi.id = v.item_id`,
-        params
-      );
     }
 
     feed.sort((a, b) => b.score - a.score);
     res.json(feed);
+  });
+
+  /**
+   * Explicit "I've seen this" action — called once when the app loads,
+   * not on every background poll. This is what makes "what changed since
+   * you last checked" mean something real instead of resetting every 15s.
+   */
+  router.post('/watchlists/:id/mark-seen', async (req, res) => {
+    const { rows: items } = await db.query(
+      'SELECT * FROM watchlist_items WHERE watchlist_id=$1',
+      [req.params.id]
+    );
+    const symbols = items.map((i) => i.symbol);
+    if (!symbols.length) return res.json({ ok: true });
+
+    const { rows: snapshots } = await db.query(
+      `SELECT DISTINCT ON (symbol) * FROM price_snapshots WHERE symbol = ANY($1) ORDER BY symbol, fetched_at DESC`,
+      [symbols]
+    );
+    const snapshotBySymbol = Object.fromEntries(snapshots.map((s) => [s.symbol, s]));
+
+    for (const item of items) {
+      const snap = snapshotBySymbol[item.symbol];
+      if (snap) {
+        await db.query(
+          'UPDATE watchlist_items SET last_seen_snapshot_id=$1, last_seen_at=now() WHERE id=$2',
+          [snap.id, item.id]
+        );
+      }
+    }
+    res.json({ ok: true });
   });
 
   return router;

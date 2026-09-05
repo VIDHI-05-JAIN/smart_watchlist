@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { createWatchlist, addSymbol, removeSymbol, getFeed } from './api';
+import { createWatchlist, addSymbol, removeSymbol, getFeed, markSeen } from './api';
 import AddSymbol from './components/AddSymbol';
 import WatchlistFeed from './components/WatchlistFeed';
 import './App.css';
@@ -12,8 +12,6 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [justAdded, setJustAdded] = useState(null);
 
-  // Always resolve the watchlist by user identity, not browser storage —
-  // this is what makes it persist across devices/sessions correctly.
   useEffect(() => {
     createWatchlist(USER_ID, 'My Watchlist').then((w) => setWatchlistId(w.id));
   }, []);
@@ -26,11 +24,23 @@ function App() {
       .finally(() => setLoading(false));
   }, [watchlistId]);
 
+  // On first load of a watchlist: show the diff against last visit, THEN
+  // mark everything as seen for the NEXT visit. Fires once per watchlist
+  // load, not on every 15s poll.
   useEffect(() => {
-    refresh();
+    if (!watchlistId) return;
+    (async () => {
+      await refresh();
+      await markSeen(watchlistId);
+    })();
+  }, [watchlistId]);
+
+  // Background price refresh only — does not touch last_seen.
+  useEffect(() => {
+    if (!watchlistId) return;
     const interval = setInterval(refresh, 15_000);
     return () => clearInterval(interval);
-  }, [refresh]);
+  }, [watchlistId, refresh]);
 
   const handleAdd = async (symbol) => {
     await addSymbol(watchlistId, symbol);

@@ -13,3 +13,5 @@ export const removeSymbol = (watchlistId, symbol) =>
 
 export const getFeed = (watchlistId) =>
   axios.get(`${API_URL}/watchlists/${watchlistId}/feed`).then((r) => r.data);
+export const markSeen = (watchlistId) =>
+  axios.post(`${API_URL}/watchlists/${watchlistId}/mark-seen`).then((r) => r.data);
